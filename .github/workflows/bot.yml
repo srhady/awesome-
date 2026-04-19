@@ -22,7 +22,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install requests tweepy
+          pip install requests tweepy cloudscraper
+
 
       - name: Run Bot Script
         env:
