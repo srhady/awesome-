@@ -1,14 +1,13 @@
 import requests
 import tweepy
 import os
+import time
 
-# গিটহাব সিক্রেটস থেকে API Key গুলো নেওয়া হবে
 API_KEY = os.environ.get("API_KEY")
 API_SECRET = os.environ.get("API_SECRET")
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET = os.environ.get("ACCESS_TOKEN_SECRET")
 
-# ভিআইপি টিমের লিস্ট (এদের খেলা থাকলেই শুধু টুইট হবে)
 VIP_TEAMS = [
     "Real Madrid", "FC Barcelona", "Atletico Madrid", "Girona",
     "Manchester United", "Manchester City", "Liverpool", "Arsenal", "Chelsea", "Tottenham Hotspur", "Newcastle United", "Aston Villa",
@@ -36,16 +35,31 @@ def run_bot():
     tweeted_goals = load_tweeted_goals()
     
     url = 'https://www.sofascore.com/api/v1/sport/football/events/live'
+    
+    # এখানে রিয়েল ব্রাউজারের পরিচয় দেওয়া হয়েছে যাতে ব্লক না করে
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Cache-Control': 'no-cache'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://www.sofascore.com/',
+        'Origin': 'https://www.sofascore.com'
     }
 
     try:
-        live_res = requests.get(url, headers=headers).json()
-        events = live_res.get('events', [])
+        response = requests.get(url, headers=headers)
+        print(f"📡 Server Status Code: {response.status_code}") # এটা চেক করবে সার্ভার ব্লক করেছে কি না
         
-        # Tweepy Client Setup
+        if response.status_code != 200:
+            print(f"❌ Blocked! Server responded with HTML instead of JSON.")
+            return
+
+        live_res = response.json()
+        events = live_res.get('events', [])
+        print(f"⚽ Total live matches running right now: {len(events)}")
+        
+        if len(events) == 0:
+            print("No live football matches at this moment.")
+            return
+
         client = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET,
@@ -53,14 +67,19 @@ def run_bot():
             access_token_secret=ACCESS_TOKEN_SECRET
         )
 
+        vip_found = False
+
         for match in events:
             match_id = match['id']
             home = match.get('homeTeam', {}).get('name', 'Home')
             away = match.get('awayTeam', {}).get('name', 'Away')
             
-            # চেক করা হচ্ছে ম্যাচটি ভিআইপি লিস্টে আছে কি না
             if home in VIP_TEAMS or away in VIP_TEAMS:
-                print(f"🎯 VIP Match Found: {home} vs {away}")
+                vip_found = True
+                print(f"🎯 VIP Match Active: {home} vs {away}")
+                
+                # একটু বিরতি দেওয়া হলো যাতে একসাথে বেশি রিকোয়েস্ট গিয়ে ব্যান না খায়
+                time.sleep(1) 
                 
                 inc_url = f'https://www.sofascore.com/api/v1/event/{match_id}/incidents'
                 inc_res = requests.get(inc_url, headers=headers).json()
@@ -76,7 +95,7 @@ def run_bot():
                             h_sc = inc.get('homeScore', 0)
                             a_sc = inc.get('awayScore', 0)
                             
-                            tweet_text = f"🚨 GOAL!!! What a strike by {player}! 🔥\n⏱️ {time_min}' min\n\n⚽ {home} {h_sc} - {a_sc} {away}\n\n📺 Watch LIVE in HD with 0 buffering here:\n👉 https://livesportsplay.top\n\n#LiveFootball #Sports #livesportsplay"
+                            tweet_text = f"🚨 GOAL!!! What a strike by {player}! 🔥\n⏱️ {time_min}' min\n\n⚽ {home} {h_sc} - {a_sc} {away}\n\n📺 Watch LIVE in HD with 0 buffering here:\n👉 https://livesportsplay.top\n\n#PremierLeague #EPL #LiveFootball #FootballTwitter #FPL"
                             
                             try:
                                 client.create_tweet(text=tweet_text)
@@ -86,8 +105,11 @@ def run_bot():
                             except Exception as e:
                                 print(f"❌ Error Tweeting: {e}")
                                 
+        if not vip_found:
+            print("No VIP matches found in the current live list.")
+            
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"🔥 FATAL ERROR: {e}")
 
 if __name__ == "__main__":
     run_bot()
