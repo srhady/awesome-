@@ -1,3 +1,4 @@
+import cloudscraper
 import requests
 import tweepy
 import os
@@ -16,6 +17,7 @@ VIP_TEAMS = [
     "Paris Saint-Germain", "Marseille",
     "Argentina", "Brazil", "Portugal", "France", "England", "Germany", "Spain", "Morocco",
     "Inter Miami CF", "Al-Nassr", "Al-Hilal", "Al-Ittihad",
+    "Sunderland", # টেস্টিংয়ের জন্য সাময়িক রাখলাম
     "Bangladesh", "India", "Pakistan", "Australia", "Afghanistan",
     "Royal Challengers Bengaluru", "Chennai Super Kings", "Mumbai Indians", "Kolkata Knight Riders", "Gujarat Titans"
 ]
@@ -36,20 +38,19 @@ def run_bot():
     
     url = 'https://www.sofascore.com/api/v1/sport/football/events/live'
     
-    # এখানে রিয়েল ব্রাউজারের পরিচয় দেওয়া হয়েছে যাতে ব্লক না করে
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Referer': 'https://www.sofascore.com/',
-        'Origin': 'https://www.sofascore.com'
-    }
+    # Cloudscraper সেটআপ (ক্লাউডফ্লেয়ার বাইপাস করার জন্য)
+    scraper = cloudscraper.create_scraper(browser={
+        'browser': 'chrome',
+        'platform': 'windows',
+        'desktop': True
+    })
 
     try:
-        response = requests.get(url, headers=headers)
-        print(f"📡 Server Status Code: {response.status_code}") # এটা চেক করবে সার্ভার ব্লক করেছে কি না
+        response = scraper.get(url)
+        print(f"📡 Server Status Code: {response.status_code}")
         
         if response.status_code != 200:
-            print(f"❌ Blocked! Server responded with HTML instead of JSON.")
+            print(f"❌ Still Blocked! Cloudflare is too strict on GitHub IP.")
             return
 
         live_res = response.json()
@@ -78,11 +79,10 @@ def run_bot():
                 vip_found = True
                 print(f"🎯 VIP Match Active: {home} vs {away}")
                 
-                # একটু বিরতি দেওয়া হলো যাতে একসাথে বেশি রিকোয়েস্ট গিয়ে ব্যান না খায়
                 time.sleep(1) 
                 
                 inc_url = f'https://www.sofascore.com/api/v1/event/{match_id}/incidents'
-                inc_res = requests.get(inc_url, headers=headers).json()
+                inc_res = scraper.get(inc_url).json()
                 incidents = inc_res.get('incidents', [])
                 
                 for inc in incidents:
